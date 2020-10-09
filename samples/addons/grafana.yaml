@@ -3688,7 +3688,7 @@ data:
           "tableColumn": "",
           "targets": [
             {
-              "expr": "avg(galley_istio_networking_virtualservices)",
+              "expr": "avg(pilot_virt_services)",
               "format": "time_series",
               "intervalFactor": 1,
               "refId": "A"
