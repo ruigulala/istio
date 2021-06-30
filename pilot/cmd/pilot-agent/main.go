@@ -226,12 +226,12 @@ func initAgent(args []string) (func(), error) {
 	// listen on STS port for STS requests. For STS, see
 	// https://tools.ietf.org/html/draft-ietf-oauth-token-exchange-16.
 	// STS is used for stackdriver or other Envoy services using google gRPC.
+	var stsServer *stsserver.Server
 	if stsPort > 0 {
-		stsServer, err := initStsServer(proxy, secOpts.TokenManager)
+		stsServer, err = initStsServer(proxy, secOpts.TokenManager)
 		if err != nil {
 			return nil, err
 		}
-		defer stsServer.Stop()
 	}
 
 	// If we are using a custom template file (for control plane proxy, for example), configure this.
@@ -250,11 +250,11 @@ func initAgent(args []string) (func(), error) {
 	agentOptions := options.NewAgentOptions(proxy, proxyConfig)
 	agent := istio_agent.NewAgent(proxyConfig, agentOptions, secOpts, envoyOptions)
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	// If a status port was provided, start handling status probes.
 	if proxyConfig.StatusPort > 0 {
 		if err := initStatusServer(ctx, proxy, proxyConfig, agentOptions.EnvoyPrometheusPort, agent); err != nil {
+			cancel()
 			return nil, err
 		}
 	}
@@ -267,7 +267,14 @@ func initAgent(args []string) (func(), error) {
 	if err != nil {
 		return nil, err
 	}
-	return wait, nil
+	retFunc := func() {
+		if stsPort > 0 {
+			defer stsServer.Stop()
+		}
+		defer cancel()
+		wait()
+	}
+	return retFunc, nil
 }
 
 func getDNSDomain(podNamespace, domain string) string {
